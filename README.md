@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# わかとぴあ 🥬 野菜でそだつ相棒
 
-## Getting Started
+食事の写真を記録すると、野菜のバランスでキャラクターが成長する育成ゲームの試作品。
+20代一人暮らしの野菜摂取を「習慣化」できるかを検証するハッカソン用プロトタイプ。
 
-First, run the development server:
+## あそびかた
+
+1. Googleでログインして、相棒(たまご)に名前をつける
+2. ごはんのたびに写真を撮って、野菜の量などを3タップで記録
+3. 野菜が多いほどスコアが高く、相棒が早く成長する(たまご → ベビー → こども → おとな)
+4. 野菜が足りない日が続くと相棒が元気をなくす
+5. 「ひろば」でみんなの相棒と連続記録日数を見せ合える
+
+## 技術構成
+
+- **Next.js (App Router) + TypeScript + Tailwind CSS** — Vercelにデプロイ
+- **Supabase** — Googleログイン / Postgres / 写真ストレージ
+- 栄養判定は現在**自己申告のモック**(`src/lib/game.ts` の `judgeMeal`)。
+  将来Claude APIの画像解析に差し替える想定でここに分離してある
+
+## 起動方法
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+初回は **[SETUP.md](./SETUP.md)** の手順でSupabase・Googleログイン・Vercelの設定が必要。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 主なファイル
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| パス | 内容 |
+|---|---|
+| `supabase/setup.sql` | DBスキーマ・RLS・ストレージ設定(SQL Editorで実行) |
+| `src/lib/game.ts` | スコア判定・レベル・気分・ストリークのロジック |
+| `src/lib/meals.ts` | 写真アップロード〜キャラ更新の一連の処理 |
+| `src/components/CharacterSvg.tsx` | キャラの見た目(4段階 × 3つの気分) |
+| `src/app/home/page.tsx` | ホーム(自分のキャラ・記録) |
+| `src/app/plaza/page.tsx` | ひろば(みんなのキャラ一覧) |
+| `src/app/c/[id]/page.tsx` | キャラ個別ページ(シェア用URL) |
