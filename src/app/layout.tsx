@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     title: "わかとぴあ",
     statusBarStyle: "default",
   },
+  icons: {
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

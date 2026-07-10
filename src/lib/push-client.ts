@@ -1,5 +1,10 @@
 // Web Push のクライアント側処理(購読・解除・投稿通知の発火)
 // 購読情報の読み書きはRLS下で supabase-js から直接行う
+//
+// ブラウザ対応:
+// - Chrome / Edge / Firefox(デスクトップ・Android): タブでもPWAでも動く
+// - macOS Safari 16.1+: ブラウザのまま動く(許可はユーザー操作起点必須)
+// - iOS / iPadOS 16.4+: ホーム画面に追加したPWAからのみ動く
 
 import { getSupabase } from "./supabase";
 
@@ -22,6 +27,24 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
+// ---------- プラットフォーム判定 ----------
+
+// iPadOSのSafariはUAが"Macintosh"になるため、タッチポイント数でも判定する
+export function isIosDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
+  return /Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
+}
+
+// ホーム画面に追加したPWAとして起動しているか
+export function isStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as { standalone?: boolean }).standalone === true
+  );
+}
+
 export function isPushSupported(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -31,22 +54,56 @@ export function isPushSupported(): boolean {
   );
 }
 
+// 旧SafariはrequestPermissionがコールバック式なので両対応する
+function requestNotificationPermission(): Promise<NotificationPermission> {
+  return new Promise((resolve) => {
+    const maybePromise = Notification.requestPermission(resolve);
+    if (maybePromise && typeof maybePromise.then === "function") {
+      maybePromise.then(resolve);
+    }
+  });
+}
+
+// SW登録を待つ。serviceWorker.readyは登録失敗時に永久に解決しないため
+// getRegistration + リトライで上限を設ける
+async function getSwRegistration(): Promise<ServiceWorkerRegistration | null> {
+  for (let i = 0; i < 10; i++) {
+    const registration = await navigator.serviceWorker.getRegistration("/");
+    if (registration?.active) return registration;
+    if (registration && i >= 5) return registration; // installing/waitingでも返す
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return null;
+}
+
 export async function getPushState(): Promise<PushState> {
   if (!isPushSupported() || !vapidPublicKey()) return "unsupported";
   if (Notification.permission === "denied") return "denied";
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await getSwRegistration();
+  if (!registration) return "unsupported";
   const sub = await registration.pushManager.getSubscription();
   return sub ? "subscribed" : "unsubscribed";
 }
 
 // 通知許可 → push購読 → Supabaseに購読情報を保存
+// 注意: Safariでは許可リクエストがユーザー操作起点である必要があるため、
+// この関数はクリックハンドラから直接呼び、先に許可を取ってからSWを待つ
 export async function subscribeToPush(userId: string): Promise<void> {
-  if (!isPushSupported()) throw new Error("このブラウザは通知に対応していません");
+  if (!isPushSupported()) {
+    throw new Error(
+      isIosDevice() && !isStandalone()
+        ? "iPhoneでは「ホーム画面に追加」したアプリから通知をオンにしてね"
+        : "このブラウザは通知に対応していません"
+    );
+  }
 
-  const permission = await Notification.requestPermission();
+  const permission = await requestNotificationPermission();
   if (permission !== "granted") throw new Error("通知が許可されませんでした");
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await getSwRegistration();
+  if (!registration) {
+    throw new Error("通知の準備に失敗しました。ページを再読み込みしてみてね");
+  }
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(vapidPublicKey()),
@@ -73,7 +130,8 @@ export async function subscribeToPush(userId: string): Promise<void> {
 
 export async function unsubscribeFromPush(): Promise<void> {
   if (!isPushSupported()) return;
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await getSwRegistration();
+  if (!registration) return;
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
 

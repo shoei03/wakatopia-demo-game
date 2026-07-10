@@ -105,10 +105,20 @@ npx next dev --experimental-https
 
 → https://localhost:3000 の「せってい」で通知をオン → 「テスト通知を送る」。
 
-### iPhoneでの注意
+### ブラウザ対応
+
+| 環境 | 対応 | 条件 |
+|---|---|---|
+| Android(Chrome/Edge/Firefox) | ✅ | ブラウザのままでもPWAでもOK |
+| デスクトップ Chrome/Edge/Firefox | ✅ | ブラウザのままOK |
+| macOS Safari | ✅ | Safari 16.1以上(macOS 13以降)。ブラウザのままOK |
+| iPhone/iPad Safari | ✅ | iOS/iPadOS 16.4以上 + **ホーム画面に追加したPWAからのみ** |
+
+### iPhone/iPadでの注意
 
 iOSは **ホーム画面に追加したPWAからのみ** 通知を受け取れる(iOS 16.4以上)。
 Safariで開いて共有ボタン →「ホーム画面に追加」→ 追加したアプリを開いて設定する。
+(アプリ内の「せってい」画面でも同じ案内が自動表示されます)
 
 ## トラブルシューティング
 

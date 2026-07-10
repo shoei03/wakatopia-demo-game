@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import {
   getPushState,
+  isIosDevice,
+  isStandalone,
   sendTestNotification,
   subscribeToPush,
   unsubscribeFromPush,
@@ -34,17 +36,6 @@ const DEFAULT_PREFS = {
   notify_on_friend_post: true,
 };
 
-function isIos(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
-}
-
-function isStandalone(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    (navigator as { standalone?: boolean }).standalone === true
-  );
-}
-
 export default function NotificationSettings({ userId }: { userId: string }) {
   const [pushState, setPushState] = useState<PushState | null>(null);
   const [needsInstall, setNeedsInstall] = useState(false);
@@ -55,7 +46,7 @@ export default function NotificationSettings({ userId }: { userId: string }) {
   useEffect(() => {
     getPushState().then((state) => {
       setPushState(state);
-      setNeedsInstall(isIos() && !isStandalone());
+      setNeedsInstall(isIosDevice() && !isStandalone());
     });
     getSupabase()
       .from("notification_preferences")
@@ -129,7 +120,8 @@ export default function NotificationSettings({ userId }: { userId: string }) {
         </div>
       ) : pushState === "unsupported" ? (
         <p className="text-sm text-foreground/50">
-          このブラウザはプッシュ通知に対応していません
+          このブラウザはプッシュ通知に対応していません。
+          Chrome・Edge・Firefox、またはSafari(macOS 13以降)で開いてみてね。
         </p>
       ) : pushState === "denied" ? (
         <p className="text-sm text-foreground/50">
