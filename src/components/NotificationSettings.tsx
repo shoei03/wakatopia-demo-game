@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { getSupabase } from "@/lib/supabase";
 import {
   getPushState,
+  iosBrowser,
   isIosDevice,
   isStandalone,
   sendTestNotification,
   subscribeToPush,
   unsubscribeFromPush,
+  type IosBrowser,
   type PushState,
 } from "@/lib/push-client";
 import type { NotificationPrefs } from "@/lib/types";
@@ -36,9 +38,19 @@ const DEFAULT_PREFS = {
   notify_on_friend_post: true,
 };
 
+// ブラウザごとの共有ボタンの場所(iOSのホーム画面追加手順の出し分け)
+const IOS_SHARE_HINTS: Record<IosBrowser, string> = {
+  safari: "画面下の共有ボタン(四角から↑が出ているアイコン)をタップ",
+  chrome: "アドレスバー右の共有ボタン(四角から↑が出ているアイコン)をタップ",
+  edge: "画面下の「…」メニューから「共有」をタップ",
+  firefox: "画面下の「≡」メニューから「共有」をタップ",
+  other: "ブラウザの共有メニューを開く",
+};
+
 export default function NotificationSettings({ userId }: { userId: string }) {
   const [pushState, setPushState] = useState<PushState | null>(null);
   const [needsInstall, setNeedsInstall] = useState(false);
+  const [browser, setBrowser] = useState<IosBrowser>("other");
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -47,6 +59,7 @@ export default function NotificationSettings({ userId }: { userId: string }) {
     getPushState().then((state) => {
       setPushState(state);
       setNeedsInstall(isIosDevice() && !isStandalone());
+      setBrowser(iosBrowser());
     });
     getSupabase()
       .from("notification_preferences")
@@ -111,11 +124,19 @@ export default function NotificationSettings({ userId }: { userId: string }) {
       <h2 className="font-extrabold">🔔 通知</h2>
 
       {needsInstall ? (
-        <div className="rounded-xl bg-leaf-50 p-3 text-sm text-foreground/70 space-y-1">
-          <p className="font-bold">iPhoneで通知を受け取るには</p>
-          <p>
-            Safariの共有ボタン →「ホーム画面に追加」でアプリとして開いてね。
-            そのあとこの画面で通知をオンにできるよ。
+        <div className="rounded-xl bg-leaf-50 p-3 text-sm text-foreground/70 space-y-2">
+          <p className="font-bold">
+            📲 iPhone / iPadで通知を受け取るには、アプリとしてホーム画面に追加してね
+          </p>
+          <ol className="list-decimal list-inside space-y-1">
+            <li>{IOS_SHARE_HINTS[browser]}</li>
+            <li>「ホーム画面に追加」を選ぶ</li>
+            <li>
+              ホーム画面の「わかとぴあ」を開いて、この画面で通知をオンにする
+            </li>
+          </ol>
+          <p className="text-xs text-foreground/50">
+            ※ iOSのしくみ上、ブラウザのままでは通知を受け取れません(iOS 16.4以上)
           </p>
         </div>
       ) : pushState === "unsupported" ? (

@@ -36,6 +36,19 @@ export function isIosDevice(): boolean {
   return /Mac/.test(navigator.userAgent) && navigator.maxTouchPoints > 1;
 }
 
+// iOS上のブラウザ種別(案内文の出し分け用。iOSは全ブラウザがWebKitだが共有ボタンの場所が違う)
+export type IosBrowser = "safari" | "chrome" | "firefox" | "edge" | "other";
+
+export function iosBrowser(): IosBrowser {
+  if (typeof navigator === "undefined") return "other";
+  const ua = navigator.userAgent;
+  if (/CriOS/.test(ua)) return "chrome";
+  if (/FxiOS/.test(ua)) return "firefox";
+  if (/EdgiOS/.test(ua)) return "edge";
+  if (/Safari/.test(ua)) return "safari";
+  return "other";
+}
+
 // ホーム画面に追加したPWAとして起動しているか
 export function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
