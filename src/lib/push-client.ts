@@ -9,6 +9,9 @@
 import { getSupabase } from "./supabase";
 
 export type PushState =
+  | "insecure" // httpsでない(iOSのSW/PushはHTTPS必須。http://192.168.x.x等)
+  | "no-vapid" // NEXT_PUBLIC_VAPID_PUBLIC_KEY がビルドに入っていない
+  | "sw-failed" // Service Workerの登録が確認できなかった
   | "unsupported" // ブラウザ非対応(iOSの非standalone Safariなど)
   | "denied" // 通知許可が拒否済み
   | "unsubscribed"
@@ -90,10 +93,14 @@ async function getSwRegistration(): Promise<ServiceWorkerRegistration | null> {
 }
 
 export async function getPushState(): Promise<PushState> {
-  if (!isPushSupported() || !vapidPublicKey()) return "unsupported";
+  if (typeof window === "undefined") return "unsupported";
+  // httpだとserviceWorker自体が存在しないため、先に判定して原因を区別する
+  if (!window.isSecureContext) return "insecure";
+  if (!isPushSupported()) return "unsupported";
+  if (!vapidPublicKey()) return "no-vapid";
   if (Notification.permission === "denied") return "denied";
   const registration = await getSwRegistration();
-  if (!registration) return "unsupported";
+  if (!registration) return "sw-failed";
   const sub = await registration.pushManager.getSubscription();
   return sub ? "subscribed" : "unsubscribed";
 }

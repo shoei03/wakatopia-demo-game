@@ -139,10 +139,27 @@ export default function NotificationSettings({ userId }: { userId: string }) {
             ※ iOSのしくみ上、ブラウザのままでは通知を受け取れません(iOS 16.4以上)
           </p>
         </div>
+      ) : pushState === "insecure" ? (
+        <p className="text-sm text-foreground/50">
+          通知には https のURLが必要です。
+          http://192.168.… などのアドレスではなく、デプロイした
+          https://… のURLから開き直して、ホーム画面にも追加し直してね。
+        </p>
+      ) : pushState === "no-vapid" ? (
+        <p className="text-sm text-foreground/50">
+          サーバに通知キーが設定されていません。
+          環境変数 NEXT_PUBLIC_VAPID_PUBLIC_KEY を設定して再デプロイしてね
+          (SETUP.md 手順4)。
+        </p>
+      ) : pushState === "sw-failed" ? (
+        <p className="text-sm text-foreground/50">
+          通知の準備に失敗しました。ページを再読み込みしてみてね。
+        </p>
       ) : pushState === "unsupported" ? (
         <p className="text-sm text-foreground/50">
           このブラウザはプッシュ通知に対応していません。
           Chrome・Edge・Firefox、またはSafari(macOS 13以降)で開いてみてね。
+          iPhone/iPadの場合はiOS 16.4以上が必要です。
         </p>
       ) : pushState === "denied" ? (
         <p className="text-sm text-foreground/50">
