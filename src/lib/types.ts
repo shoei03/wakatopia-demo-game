@@ -1,5 +1,7 @@
 import type { MealSlot } from "./game";
 
+export type CharacterVisibility = "public" | "friends";
+
 export type Character = {
   id: string;
   user_id: string;
@@ -12,7 +14,22 @@ export type Character = {
   veggie_exp: number;
   protein_exp: number;
   carb_exp: number;
+  visibility: CharacterVisibility;
+  tastiness_total: number;
+  meals_count: number;
+  goal_days: number;
   created_at: string;
+};
+
+export type FriendshipStatus = "pending" | "accepted";
+
+export type Friendship = {
+  id: string;
+  requester_id: string;
+  addressee_id: string;
+  status: FriendshipStatus;
+  created_at: string;
+  accepted_at: string | null;
 };
 
 export type Meal = {

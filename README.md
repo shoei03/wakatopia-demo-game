@@ -27,6 +27,8 @@ npm run dev
 
 初回は **[SETUP.md](./SETUP.md)** の手順でSupabase・Googleログイン・Vercelの設定が必要。
 
+機能の全体像は **[docs/FEATURES.md](./docs/FEATURES.md)** を参照。
+
 ## 主なファイル
 
 | パス | 内容 |

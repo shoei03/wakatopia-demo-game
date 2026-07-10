@@ -119,6 +119,98 @@ export function branchOf(c: {
 // 分岐が見た目に反映されはじめるステージ
 export const BRANCH_VISIBLE_STAGE: Stage = 3;
 
+// ---------- パーツ見た目(食生活の統計から決定論的に導出) ----------
+
+export type BodyColorId = "base" | "leaf" | "muscle" | "mochi" | "rainbow";
+export type PatternId = "none" | "dots" | "stripes";
+export type HeadgearId = "none" | "sprout" | "band" | "riceHat";
+export type HeldItemId = "none" | "carrot" | "basket" | "trophy";
+export type AuraId = "none" | "ring" | "flame";
+export type FaceStyleId = "normal" | "sparkle" | "star";
+export type SparkleTier = 0 | 1 | 2 | 3;
+
+export type Appearance = {
+  bodyColor: BodyColorId; // 支配栄養素(分岐)
+  pattern: PatternId; // 食事回数
+  headgear: HeadgearId; // 第2栄養素
+  heldItem: HeldItemId; // 野菜pt
+  aura: AuraId; // ストリーク
+  face: FaceStyleId; // 平均おいしさ
+  sparkle: SparkleTier; // 350g達成日数
+};
+
+export const DEFAULT_APPEARANCE: Appearance = {
+  bodyColor: "base",
+  pattern: "none",
+  headgear: "none",
+  heldItem: "none",
+  aura: "none",
+  face: "normal",
+  sparkle: 0,
+};
+
+type AppearanceStats = Pick<
+  {
+    veggie_exp: number;
+    protein_exp: number;
+    carb_exp: number;
+    streak: number;
+    veggie_points: number;
+    tastiness_total: number;
+    meals_count: number;
+    goal_days: number;
+  },
+  | "veggie_exp"
+  | "protein_exp"
+  | "carb_exp"
+  | "streak"
+  | "veggie_points"
+  | "tastiness_total"
+  | "meals_count"
+  | "goal_days"
+>;
+
+// 第2栄養素(占有率25%以上)から頭のパーツを決める
+function headgearOf(c: AppearanceStats): HeadgearId {
+  const entries: [HeadgearId, number][] = [
+    ["sprout", c.veggie_exp],
+    ["band", c.protein_exp],
+    ["riceHat", c.carb_exp],
+  ];
+  const total = c.veggie_exp + c.protein_exp + c.carb_exp;
+  if (total <= 0) return "none";
+  entries.sort((a, b) => b[1] - a[1]);
+  const second = entries[1];
+  return second[1] / total >= 0.25 ? second[0] : "none";
+}
+
+// キャラの統計から見た目パーツ一式を導出する(状態を持たない読み取り時導出)。
+// どのステージでどのパーツを描くかはレンダラ(CharacterSvg)側が決める。
+export function appearanceOf(c: AppearanceStats): Appearance {
+  const branch = branchOf(c);
+  const bodyColor: BodyColorId = branch === "balance" ? "rainbow" : branch;
+  const avgTastiness =
+    c.meals_count > 0 ? c.tastiness_total / c.meals_count : 0;
+
+  return {
+    bodyColor:
+      c.veggie_exp + c.protein_exp + c.carb_exp > 0 ? bodyColor : "base",
+    pattern: c.meals_count >= 30 ? "stripes" : c.meals_count >= 10 ? "dots" : "none",
+    headgear: headgearOf(c),
+    heldItem:
+      c.veggie_points >= 120
+        ? "trophy"
+        : c.veggie_points >= 60
+          ? "basket"
+          : c.veggie_points >= 20
+            ? "carrot"
+            : "none",
+    aura: c.streak >= 14 ? "flame" : c.streak >= 7 ? "ring" : "none",
+    face: avgTastiness >= 4.3 ? "star" : avgTastiness >= 3.5 ? "sparkle" : "normal",
+    sparkle: c.goal_days >= 15 ? 3 : c.goal_days >= 5 ? 2 : c.goal_days >= 1 ? 1 : 0,
+  };
+}
+
 // ---------- 気分(直近の野菜摂取と記録の間隔で決まる) ----------
 
 export type Mood = "happy" | "ok" | "sad";
@@ -166,6 +258,11 @@ export function todayStrJst(now: Date = new Date()): string {
 // ISO文字列をJSTの日付 "YYYY-MM-DD" に変換(履歴の日付グループ化用)
 export function jstDateStr(iso: string): string {
   return formatDate(jstNow(new Date(iso)));
+}
+
+// JSTの今日0時をUTCのISO文字列で返す(当日分の食事の絞り込み用)
+export function jstTodayStartIso(): string {
+  return new Date(`${todayStrJst()}T00:00:00+09:00`).toISOString();
 }
 
 // JSTの時刻から食事スロットの初期値を推定する

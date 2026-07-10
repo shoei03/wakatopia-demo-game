@@ -1,6 +1,7 @@
 import Link from "next/link";
 import CharacterSvg from "./CharacterSvg";
 import {
+  appearanceOf,
   levelFromExp,
   moodOf,
   stageFromLevel,
@@ -19,8 +20,16 @@ export default function CharacterCard({ character }: { character: Character }) {
       href={`/c/${character.id}`}
       className="rounded-2xl bg-white border border-leaf-100 shadow-sm p-3 flex flex-col items-center gap-1 active:scale-95 transition-transform"
     >
-      <CharacterSvg stage={stage} mood={mood} size={96} />
-      <p className="font-bold text-sm truncate max-w-full">{character.name}</p>
+      <CharacterSvg
+        stage={stage}
+        mood={mood}
+        appearance={appearanceOf(character)}
+        size={96}
+      />
+      <p className="font-bold text-sm truncate max-w-full">
+        {character.visibility === "friends" && "🔒 "}
+        {character.name}
+      </p>
       <p className="text-xs text-foreground/60">
         Lv.{level} {STAGE_NAMES[stage]}
       </p>

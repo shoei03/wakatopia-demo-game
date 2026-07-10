@@ -12,6 +12,7 @@ import {
   type MealResult,
 } from "@/lib/meals";
 import {
+  appearanceOf,
   BRANCH_LABELS,
   BRANCH_VISIBLE_STAGE,
   branchOf,
@@ -19,22 +20,18 @@ import {
   levelFromExp,
   levelProgress,
   MOOD_LABELS,
+  jstTodayStartIso,
   moodOf,
   stageFromLevel,
   STAGE_NAMES,
-  todayStrJst,
   VEGGIE_LABELS,
 } from "@/lib/game";
 import type { Character, Meal } from "@/lib/types";
 import CharacterSvg from "@/components/CharacterSvg";
+import TappableCharacter from "@/components/TappableCharacter";
 import MealUploadModal from "@/components/MealUploadModal";
 import BottomNav from "@/components/BottomNav";
 import VeggieMeter from "@/components/VeggieMeter";
-
-// JSTの今日0時をUTCのISO文字列で返す(当日分の食事の絞り込み用)
-function jstTodayStartIso(): string {
-  return new Date(`${todayStrJst()}T00:00:00+09:00`).toISOString();
-}
 
 export default function HomePage() {
   const router = useRouter();
@@ -102,9 +99,12 @@ export default function HomePage() {
 
       {/* キャラクター */}
       <section className="rounded-3xl bg-white border border-leaf-100 shadow-sm p-5 flex flex-col items-center gap-2">
-        <div className="animate-bob">
-          <CharacterSvg stage={stage} mood={mood} branch={branch} size={190} />
-        </div>
+        <TappableCharacter
+          stage={stage}
+          mood={mood}
+          appearance={appearanceOf(character)}
+          size={190}
+        />
         <h2 className="text-lg font-extrabold">{character.name}</h2>
         <p className="text-sm text-foreground/60">
           Lv.{level} {STAGE_NAMES[stage]}・{MOOD_LABELS[mood]}

@@ -2,7 +2,10 @@ import { getSupabase } from "./supabase";
 import { resizeImage } from "./image";
 import {
   branchOf,
+  DAILY_VEGGIE_TARGET_G,
   expFromMeal,
+  jstDateStr,
+  jstTodayStartIso,
   judgeMeal,
   levelFromExp,
   nextStreak,
@@ -76,6 +79,13 @@ export async function submitMeal(
 
   const recentVeggieAvg = await computeRecentVeggieAvg(userId, veggieAmount);
 
+  // 350g達成日数: 今回の投稿で当日合計が350gを初めて超えたら+1
+  // (今回の投稿はすでにinsert済みなので当日合計には含まれている)
+  const todayGrams = await fetchTodayGrams(userId);
+  const crossedGoal =
+    todayGrams >= DAILY_VEGGIE_TARGET_G &&
+    todayGrams - report.veggieGrams < DAILY_VEGGIE_TARGET_G;
+
   const today = todayStrJst();
   const oldLevel = levelFromExp(character.exp);
   const newExp = character.exp + expGained;
@@ -95,6 +105,9 @@ export async function submitMeal(
     veggie_exp: character.veggie_exp + gains.veggie,
     protein_exp: character.protein_exp + gains.protein,
     carb_exp: character.carb_exp + gains.carb,
+    tastiness_total: character.tastiness_total + report.tastiness,
+    meals_count: character.meals_count + 1,
+    goal_days: character.goal_days + (crossedGoal ? 1 : 0),
   };
   const { data: updated, error: updateError } = await supabase
     .from("characters")
@@ -114,6 +127,16 @@ export async function submitMeal(
     newLevel,
     branch: branchOf(newCharacter),
   };
+}
+
+// 当日(JST)の野菜グラム合計(350g達成日数の判定に使う)
+async function fetchTodayGrams(userId: string): Promise<number> {
+  const { data } = await getSupabase()
+    .from("meals")
+    .select("veggie_grams")
+    .eq("user_id", userId)
+    .gte("created_at", jstTodayStartIso());
+  return (data ?? []).reduce((sum, m) => sum + (m.veggie_grams ?? 0), 0);
 }
 
 // 直近7日の野菜量平均を再計算(気分の判定に使う)
@@ -159,6 +182,19 @@ export async function deleteMeal(
   const expGained = meal.exp_gained ?? meal.score;
   const recentVeggieAvg = await computeRecentVeggieAvg(character.user_id, 0);
 
+  // goal_days: 当日分の削除で合計が350gを割り込んだ場合のみ-1
+  // (過去日の削除では再計算しない。streakと同じ簡略化)
+  let goalDaysDelta = 0;
+  if (jstDateStr(meal.created_at) === todayStrJst()) {
+    const todayGrams = await fetchTodayGrams(character.user_id); // 削除後の合計
+    if (
+      todayGrams < DAILY_VEGGIE_TARGET_G &&
+      todayGrams + (meal.veggie_grams ?? 0) >= DAILY_VEGGIE_TARGET_G
+    ) {
+      goalDaysDelta = -1;
+    }
+  }
+
   const updates = {
     exp: Math.max(0, character.exp - expGained),
     veggie_points: Math.max(0, character.veggie_points - meal.veggie_amount),
@@ -166,6 +202,12 @@ export async function deleteMeal(
     veggie_exp: Math.max(0, character.veggie_exp - gains.veggie),
     protein_exp: Math.max(0, character.protein_exp - gains.protein),
     carb_exp: Math.max(0, character.carb_exp - gains.carb),
+    tastiness_total: Math.max(
+      0,
+      character.tastiness_total - (meal.tastiness ?? 0)
+    ),
+    meals_count: Math.max(0, character.meals_count - 1),
+    goal_days: Math.max(0, character.goal_days + goalDaysDelta),
   };
   const { data: updated, error: updateError } = await supabase
     .from("characters")

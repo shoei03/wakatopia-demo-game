@@ -41,6 +41,7 @@ export default function MealUploadModal({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MealResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
@@ -120,7 +121,7 @@ export default function MealUploadModal({
 
         {step === "input" && (
           <div className="space-y-5">
-            {/* 写真 */}
+            {/* 写真(アルバム選択 / カメラ直接起動の2系統) */}
             <input
               ref={fileInputRef}
               type="file"
@@ -131,23 +132,51 @@ export default function MealUploadModal({
                 if (f) pickFile(f);
               }}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full aspect-[4/3] rounded-2xl border-2 border-dashed border-leaf-200 bg-leaf-50 flex items-center justify-center overflow-hidden"
-            >
-              {previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewUrl}
-                  alt="食事のプレビュー"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-foreground/50 font-bold">
-                  📸 タップして写真をえらぶ
-                </span>
-              )}
-            </button>
+            {/* capture指定でモバイルはカメラが直接開く(端末の写真ライブラリには保存されない) */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickFile(f);
+              }}
+            />
+            <div>
+              <button
+                onClick={() => cameraInputRef.current?.click()}
+                className="w-full aspect-[4/3] rounded-2xl border-2 border-dashed border-leaf-200 bg-leaf-50 flex items-center justify-center overflow-hidden"
+              >
+                {previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewUrl}
+                    alt="食事のプレビュー"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-foreground/50 font-bold">
+                    📸 タップしてカメラでとる
+                  </span>
+                )}
+              </button>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="py-2.5 rounded-xl text-sm font-bold border-2 bg-white border-leaf-100 text-foreground/70"
+                >
+                  📷 カメラでとる
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="py-2.5 rounded-xl text-sm font-bold border-2 bg-white border-leaf-100 text-foreground/70"
+                >
+                  🖼 アルバムからえらぶ
+                </button>
+              </div>
+            </div>
 
             {/* いつのごはん? */}
             <div>

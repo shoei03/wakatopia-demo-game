@@ -13,6 +13,7 @@ export type NotificationKind =
   | "reminder_noon"
   | "reminder_evening"
   | "friend_post"
+  | "friend_request"
   | "test";
 
 let vapidConfigured = false;

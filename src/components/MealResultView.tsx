@@ -2,6 +2,7 @@
 
 import CharacterSvg from "./CharacterSvg";
 import {
+  appearanceOf,
   BRANCH_LABELS,
   BRANCH_VISIBLE_STAGE,
   levelFromExp,
@@ -34,7 +35,7 @@ export default function MealResultView({
         <CharacterSvg
           stage={stage}
           mood={mood}
-          branch={result.branch}
+          appearance={appearanceOf(c)}
           size={150}
         />
       </div>

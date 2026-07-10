@@ -224,7 +224,7 @@ export default function NotificationSettings({ userId }: { userId: string }) {
                 }
                 className="w-4 h-4 accent-leaf-500"
               />
-              🌳 ほかの人の投稿を通知
+              🌳 フレンドの投稿を通知
             </label>
           </div>
 

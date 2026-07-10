@@ -55,3 +55,82 @@ body {
 .animate-pop-in {
   animation: pop-in 0.5s ease-out both;
 }
+
+/* ---------- キャラのタップリアクション ---------- */
+
+@keyframes char-jump {
+  0% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-26px) scale(1.05);
+  }
+  55% {
+    transform: translateY(0) scale(0.97);
+  }
+  72% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-char-jump {
+  animation: char-jump 0.65s ease-out both;
+}
+
+@keyframes char-spin {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+  60% {
+    transform: rotate(360deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.animate-char-spin {
+  animation: char-spin 0.7s ease-in-out both;
+}
+
+@keyframes char-squish {
+  0% {
+    transform: scale(1, 1);
+  }
+  30% {
+    transform: scale(1.18, 0.78);
+  }
+  60% {
+    transform: scale(0.92, 1.1);
+  }
+  80% {
+    transform: scale(1.05, 0.96);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+
+.animate-char-squish {
+  animation: char-squish 0.55s ease-out both;
+  transform-origin: bottom center;
+}
+
+/* タップ時に飛び出すパーティクル */
+@keyframes burst-float {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--burst-x, 0px), var(--burst-y, -50px)) scale(1.4);
+    opacity: 0;
+  }
+}
+
+.animate-burst {
+  animation: burst-float 0.75s ease-out both;
+}

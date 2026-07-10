@@ -181,6 +181,22 @@ export async function notifyFriendPost(
   });
 }
 
+// フレンド申請の通知を依頼する(失敗しても呼び出し元は気にしない)
+export async function notifyFriendRequest(targetUserId: string): Promise<void> {
+  const { data } = await getSupabase().auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return;
+
+  await fetch("/api/push/friend-request", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ targetUserId }),
+  });
+}
+
 // 設定画面の「テスト通知」用
 export async function sendTestNotification(): Promise<void> {
   const { data } = await getSupabase().auth.getSession();

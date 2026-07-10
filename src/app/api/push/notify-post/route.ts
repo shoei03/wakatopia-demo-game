@@ -5,7 +5,7 @@ import {
 } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/push-server";
 
-// 投稿完了時に他ユーザへ「ごはんを食べたよ」通知を送る
+// 投稿完了時にフレンドへ「ごはんを食べたよ」通知を送る
 export async function POST(req: Request) {
   const posterId = await getUserIdFromAuthHeader(req);
   if (!posterId) {
@@ -24,11 +24,26 @@ export async function POST(req: Request) {
 
   const admin = getServiceRoleClient();
 
-  // 購読者(投稿者以外)のうち、友だち投稿通知をオフにしていない人へ送る
+  // 投稿者の承認済みフレンドを取得(フレンド機能導入後は全員配信ではなくフレンドのみ)
+  const { data: friendships } = await admin
+    .from("friendships")
+    .select("requester_id, addressee_id")
+    .eq("status", "accepted")
+    .or(`requester_id.eq.${posterId},addressee_id.eq.${posterId}`);
+  const friendIds = [
+    ...new Set(
+      (friendships ?? []).map((f) =>
+        f.requester_id === posterId ? f.addressee_id : f.requester_id
+      )
+    ),
+  ];
+  if (friendIds.length === 0) return NextResponse.json({ sent: 0 });
+
+  // フレンドのうち購読していて、投稿通知をオフにしていない人へ送る
   const { data: subs } = await admin
     .from("push_subscriptions")
     .select("user_id")
-    .neq("user_id", posterId);
+    .in("user_id", friendIds);
   const candidateIds = [...new Set((subs ?? []).map((s) => s.user_id))];
   if (candidateIds.length === 0) return NextResponse.json({ sent: 0 });
 
