@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { href: "/home", label: "ホーム", icon: "🏠" },
+  { href: "/meals", label: "きろく", icon: "📖" },
   { href: "/plaza", label: "ひろば", icon: "🌳" },
+  { href: "/settings", label: "せってい", icon: "⚙️" },
 ] as const;
 
 export default function BottomNav() {
@@ -13,7 +15,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-leaf-100 pb-[env(safe-area-inset-bottom)]">
-      <div className="max-w-md mx-auto grid grid-cols-2">
+      <div className="max-w-md mx-auto grid grid-cols-4">
         {TABS.map((tab) => {
           const active = pathname.startsWith(tab.href);
           return (

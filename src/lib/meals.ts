@@ -1,22 +1,42 @@
 import { getSupabase } from "./supabase";
 import { resizeImage } from "./image";
 import {
+  branchOf,
+  expFromMeal,
   judgeMeal,
   levelFromExp,
   nextStreak,
   stageFromLevel,
-  todayStr,
+  todayStrJst,
+  veggieAmountFromGrams,
+  type Branch,
   type MealReport,
 } from "./game";
 import type { Character, Meal } from "./types";
 
 export type MealResult = {
   score: number;
+  expGained: number;
   character: Character;
   leveledUp: boolean;
   evolved: boolean;
   newLevel: number;
+  branch: Branch;
 };
+
+// 分岐用の栄養素累積: 各次元とも1食あたり最大3ptに揃える
+// (スコアの重みをそのまま使うと野菜が常に支配的になり全員リーフになるため)
+function nutrientGains(report: {
+  veggie_amount: number;
+  has_protein: boolean;
+  has_carbs: boolean;
+}) {
+  return {
+    veggie: report.veggie_amount,
+    protein: report.has_protein ? 3 : 0,
+    carb: report.has_carbs ? 3 : 0,
+  };
+}
 
 // 写真アップロード → 食事記録 → キャラ更新までの一連の処理
 export async function submitMeal(
@@ -37,41 +57,44 @@ export async function submitMeal(
   const photoUrl = supabase.storage.from("meals").getPublicUrl(path)
     .data.publicUrl;
 
+  const veggieAmount = veggieAmountFromGrams(report.veggieGrams);
   const score = judgeMeal(report);
+  const expGained = expFromMeal(score, report.tastiness);
   const { error: mealError } = await supabase.from("meals").insert({
     user_id: userId,
     photo_url: photoUrl,
-    veggie_amount: report.veggieAmount,
+    veggie_amount: veggieAmount,
     has_protein: report.hasProtein,
     has_carbs: report.hasCarbs,
     score,
+    meal_slot: report.slot,
+    veggie_grams: report.veggieGrams,
+    tastiness: report.tastiness,
+    exp_gained: expGained,
   });
   if (mealError) throw mealError;
 
-  // 直近7日の野菜量平均を再計算(気分の判定に使う)
-  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const { data: recentMeals } = await supabase
-    .from("meals")
-    .select("veggie_amount")
-    .eq("user_id", userId)
-    .gte("created_at", since);
-  const amounts = (recentMeals ?? []).map((m) => m.veggie_amount);
-  const recentVeggieAvg =
-    amounts.length > 0
-      ? amounts.reduce((a, b) => a + b, 0) / amounts.length
-      : report.veggieAmount;
+  const recentVeggieAvg = await computeRecentVeggieAvg(userId, veggieAmount);
 
-  const today = todayStr();
+  const today = todayStrJst();
   const oldLevel = levelFromExp(character.exp);
-  const newExp = character.exp + score;
+  const newExp = character.exp + expGained;
   const newLevel = levelFromExp(newExp);
 
+  const gains = nutrientGains({
+    veggie_amount: veggieAmount,
+    has_protein: report.hasProtein,
+    has_carbs: report.hasCarbs,
+  });
   const updates = {
     exp: newExp,
-    veggie_points: character.veggie_points + report.veggieAmount,
+    veggie_points: character.veggie_points + veggieAmount,
     streak: nextStreak(character.streak, character.last_meal_date, today),
     last_meal_date: today,
     recent_veggie_avg: recentVeggieAvg,
+    veggie_exp: character.veggie_exp + gains.veggie,
+    protein_exp: character.protein_exp + gains.protein,
+    carb_exp: character.carb_exp + gains.carb,
   };
   const { data: updated, error: updateError } = await supabase
     .from("characters")
@@ -81,13 +104,91 @@ export async function submitMeal(
     .single();
   if (updateError) throw updateError;
 
+  const newCharacter = updated as Character;
   return {
     score,
-    character: updated as Character,
+    expGained,
+    character: newCharacter,
     leveledUp: newLevel > oldLevel,
     evolved: stageFromLevel(newLevel) > stageFromLevel(oldLevel),
     newLevel,
+    branch: branchOf(newCharacter),
   };
+}
+
+// 直近7日の野菜量平均を再計算(気分の判定に使う)
+async function computeRecentVeggieAvg(
+  userId: string,
+  fallback: number
+): Promise<number> {
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: recentMeals } = await getSupabase()
+    .from("meals")
+    .select("veggie_amount")
+    .eq("user_id", userId)
+    .gte("created_at", since);
+  const amounts = (recentMeals ?? []).map((m) => m.veggie_amount);
+  return amounts.length > 0
+    ? amounts.reduce((a, b) => a + b, 0) / amounts.length
+    : fallback;
+}
+
+// 食事記録の削除(誤投稿の取り消し)。キャラへの加算分を差し戻す。
+// streakは戻さない(履歴の再計算が要るためハッカソンでは簡略化)。
+export async function deleteMeal(
+  character: Character,
+  meal: Meal
+): Promise<Character> {
+  const supabase = getSupabase();
+
+  const { error: deleteError } = await supabase
+    .from("meals")
+    .delete()
+    .eq("id", meal.id);
+  if (deleteError) throw deleteError;
+
+  // Storageの写真も削除(public URLの "/meals/" 以降がパス)
+  const marker = "/meals/";
+  const idx = meal.photo_url.indexOf(marker);
+  if (idx >= 0) {
+    const path = meal.photo_url.slice(idx + marker.length);
+    await supabase.storage.from("meals").remove([path]);
+  }
+
+  const gains = nutrientGains(meal);
+  const expGained = meal.exp_gained ?? meal.score;
+  const recentVeggieAvg = await computeRecentVeggieAvg(character.user_id, 0);
+
+  const updates = {
+    exp: Math.max(0, character.exp - expGained),
+    veggie_points: Math.max(0, character.veggie_points - meal.veggie_amount),
+    recent_veggie_avg: recentVeggieAvg,
+    veggie_exp: Math.max(0, character.veggie_exp - gains.veggie),
+    protein_exp: Math.max(0, character.protein_exp - gains.protein),
+    carb_exp: Math.max(0, character.carb_exp - gains.carb),
+  };
+  const { data: updated, error: updateError } = await supabase
+    .from("characters")
+    .update(updates)
+    .eq("id", character.id)
+    .select()
+    .single();
+  if (updateError) throw updateError;
+  return updated as Character;
+}
+
+export async function updateCharacterName(
+  characterId: string,
+  name: string
+): Promise<Character> {
+  const { data, error } = await getSupabase()
+    .from("characters")
+    .update({ name })
+    .eq("id", characterId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Character;
 }
 
 export async function fetchMyCharacter(
@@ -125,6 +226,21 @@ export async function fetchRecentMeals(
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as Meal[];
+}
+
+// 履歴ページ・日次メーター用: 指定日時以降の食事を新しい順で取得
+export async function fetchMealsSince(
+  userId: string,
+  sinceIso: string
+): Promise<Meal[]> {
+  const { data, error } = await getSupabase()
+    .from("meals")
+    .select()
+    .eq("user_id", userId)
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Meal[];
 }

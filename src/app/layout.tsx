@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { M_PLUS_Rounded_1c } from "next/font/google";
 import "./globals.css";
+import SwRegister from "@/components/SwRegister";
 
 const rounded = M_PLUS_Rounded_1c({
   variable: "--font-rounded",
@@ -13,6 +14,17 @@ export const metadata: Metadata = {
   title: "わかとぴあ | 野菜でそだつ相棒",
   description:
     "食事の写真を記録すると、野菜のバランスでキャラクターが成長する育成ゲーム",
+  appleWebApp: {
+    capable: true,
+    title: "わかとぴあ",
+    statusBarStyle: "default",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#8ED081",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -22,7 +34,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja" className={`${rounded.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <SwRegister />
+      </body>
     </html>
   );
 }

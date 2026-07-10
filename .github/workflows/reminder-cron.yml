@@ -1,0 +1,24 @@
+# リマインダー通知の定期実行
+# Vercel Hobbyのcronは1日1回のみなので、GitHub Actionsから15分ごとに叩く
+#
+# 必要なリポジトリシークレット(Settings > Secrets and variables > Actions):
+#   APP_URL      デプロイ先URL(例: https://wakatopia.vercel.app)
+#   CRON_SECRET  Vercelの環境変数 CRON_SECRET と同じ値
+
+name: reminder-cron
+
+on:
+  schedule:
+    # 15分ごと(GitHub Actionsのscheduleは数分遅れることがある)
+    - cron: "*/15 * * * *"
+  workflow_dispatch: # 手動実行(動作確認用)
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call reminders endpoint
+        run: |
+          curl -sS --fail-with-body \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/reminders"

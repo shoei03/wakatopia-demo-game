@@ -7,10 +7,14 @@ import { getSupabase } from "@/lib/supabase";
 import {
   createCharacter,
   fetchMyCharacter,
+  fetchMealsSince,
   fetchRecentMeals,
   type MealResult,
 } from "@/lib/meals";
 import {
+  BRANCH_LABELS,
+  BRANCH_VISIBLE_STAGE,
+  branchOf,
   EXP_PER_LEVEL,
   levelFromExp,
   levelProgress,
@@ -18,12 +22,19 @@ import {
   moodOf,
   stageFromLevel,
   STAGE_NAMES,
+  todayStrJst,
   VEGGIE_LABELS,
 } from "@/lib/game";
 import type { Character, Meal } from "@/lib/types";
 import CharacterSvg from "@/components/CharacterSvg";
 import MealUploadModal from "@/components/MealUploadModal";
 import BottomNav from "@/components/BottomNav";
+import VeggieMeter from "@/components/VeggieMeter";
+
+// JSTの今日0時をUTCのISO文字列で返す(当日分の食事の絞り込み用)
+function jstTodayStartIso(): string {
+  return new Date(`${todayStrJst()}T00:00:00+09:00`).toISOString();
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -31,15 +42,18 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [character, setCharacter] = useState<Character | null>(null);
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [todayGrams, setTodayGrams] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
 
   const loadData = useCallback(async (userId: string) => {
-    const [char, recent] = await Promise.all([
+    const [char, recent, todayMeals] = await Promise.all([
       fetchMyCharacter(userId),
       fetchRecentMeals(userId),
+      fetchMealsSince(userId, jstTodayStartIso()),
     ]);
     setCharacter(char);
     setMeals(recent);
+    setTodayGrams(todayMeals.reduce((sum, m) => sum + (m.veggie_grams ?? 0), 0));
   }, []);
 
   useEffect(() => {
@@ -56,14 +70,9 @@ export default function HomePage() {
     });
   }, [router, loadData]);
 
-  const signOut = async () => {
-    await getSupabase().auth.signOut();
-    router.replace("/");
-  };
-
   const onMealComplete = (result: MealResult) => {
     setCharacter(result.character);
-    if (user) fetchRecentMeals(user.id).then(setMeals);
+    if (user) loadData(user.id);
   };
 
   if (loading) {
@@ -83,28 +92,28 @@ export default function HomePage() {
   const level = levelFromExp(character.exp);
   const stage = stageFromLevel(level);
   const mood = moodOf(character.last_meal_date, character.recent_veggie_avg);
+  const branch = branchOf(character);
 
   return (
     <main className="flex-1 max-w-md w-full mx-auto p-4 pb-24 space-y-4">
       <header className="flex items-center justify-between">
         <h1 className="text-xl font-extrabold text-leaf-700">わかとぴあ</h1>
-        <button
-          onClick={signOut}
-          className="text-xs text-foreground/40 font-bold"
-        >
-          ログアウト
-        </button>
       </header>
 
       {/* キャラクター */}
       <section className="rounded-3xl bg-white border border-leaf-100 shadow-sm p-5 flex flex-col items-center gap-2">
         <div className="animate-bob">
-          <CharacterSvg stage={stage} mood={mood} size={190} />
+          <CharacterSvg stage={stage} mood={mood} branch={branch} size={190} />
         </div>
         <h2 className="text-lg font-extrabold">{character.name}</h2>
         <p className="text-sm text-foreground/60">
           Lv.{level} {STAGE_NAMES[stage]}・{MOOD_LABELS[mood]}
         </p>
+        {stage >= BRANCH_VISIBLE_STAGE && (
+          <p className="text-xs font-bold text-leaf-600">
+            {BRANCH_LABELS[branch]}
+          </p>
+        )}
 
         {/* EXPバー */}
         <div className="w-full mt-1">
@@ -128,6 +137,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* 350gメーター */}
+      <VeggieMeter todayGrams={todayGrams} />
+
       <button
         onClick={() => setModalOpen(true)}
         className="w-full h-16 rounded-full bg-leaf-500 text-white font-extrabold text-xl shadow-lg active:scale-95 transition-transform"
@@ -137,7 +149,7 @@ export default function HomePage() {
 
       {/* 食事履歴 */}
       <section>
-        <h3 className="font-extrabold mb-2">きろく</h3>
+        <h3 className="font-extrabold mb-2">さいきんのきろく</h3>
         {meals.length === 0 ? (
           <p className="text-sm text-foreground/50 bg-white rounded-2xl border border-leaf-100 p-4">
             まだ記録がありません。最初のごはんをあげてみよう!
@@ -157,9 +169,7 @@ export default function HomePage() {
                   loading="lazy"
                 />
                 <div className="p-1.5 text-[11px] leading-tight">
-                  <p className="font-bold text-leaf-700">
-                    {meal.score}てん
-                  </p>
+                  <p className="font-bold text-leaf-700">{meal.score}てん</p>
                   <p className="text-foreground/50">
                     🥬{VEGGIE_LABELS[meal.veggie_amount]}・
                     {new Date(meal.created_at).toLocaleDateString("ja-JP", {

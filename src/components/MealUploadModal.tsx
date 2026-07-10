@@ -2,19 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import CharacterSvg from "./CharacterSvg";
+import MealResultView from "./MealResultView";
 import {
+  defaultSlot,
   levelFromExp,
-  MAX_SCORE,
-  moodOf,
+  SLOT_LABELS,
   stageFromLevel,
-  STAGE_NAMES,
   VEGGIE_LABELS,
+  veggieAmountFromGrams,
   type MealReport,
+  type MealSlot,
 } from "@/lib/game";
 import { submitMeal, type MealResult } from "@/lib/meals";
 import type { Character } from "@/lib/types";
 
 type Step = "input" | "submitting" | "result";
+
+const GRAM_PRESETS = [0, 50, 100, 150, 200] as const;
+const SLOTS: MealSlot[] = ["morning", "noon", "evening"];
 
 export default function MealUploadModal({
   character,
@@ -28,9 +33,11 @@ export default function MealUploadModal({
   const [step, setStep] = useState<Step>("input");
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [veggieAmount, setVeggieAmount] = useState<0 | 1 | 2 | 3 | null>(null);
+  const [slot, setSlot] = useState<MealSlot>(defaultSlot());
+  const [veggieGrams, setVeggieGrams] = useState<number | null>(null);
   const [hasProtein, setHasProtein] = useState<boolean | null>(null);
   const [hasCarbs, setHasCarbs] = useState<boolean | null>(null);
+  const [tastiness, setTastiness] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<MealResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,27 +56,45 @@ export default function MealUploadModal({
 
   const canSubmit =
     file !== null &&
-    veggieAmount !== null &&
+    veggieGrams !== null &&
     hasProtein !== null &&
-    hasCarbs !== null;
+    hasCarbs !== null &&
+    tastiness !== null;
 
   const submit = async () => {
-    if (!canSubmit || !file || veggieAmount === null) return;
+    if (
+      !file ||
+      veggieGrams === null ||
+      hasProtein === null ||
+      hasCarbs === null ||
+      tastiness === null
+    )
+      return;
     setStep("submitting");
     setError(null);
     const report: MealReport = {
-      veggieAmount,
-      hasProtein: hasProtein!,
-      hasCarbs: hasCarbs!,
+      veggieGrams,
+      hasProtein,
+      hasCarbs,
+      tastiness,
+      slot,
     };
     try {
       const r = await submitMeal(character, file, report);
       setResult(r);
       setStep("result");
+      notifyFriends(r);
     } catch (e) {
       setError(e instanceof Error ? e.message : "記録に失敗しました");
       setStep("input");
     }
+  };
+
+  // 他ユーザへの投稿通知(失敗しても投稿フローは止めない)
+  const notifyFriends = (r: MealResult) => {
+    import("@/lib/push-client")
+      .then((m) => m.notifyFriendPost(r.character.name, r.score))
+      .catch(() => {});
   };
 
   const finish = () => {
@@ -124,27 +149,55 @@ export default function MealUploadModal({
               )}
             </button>
 
-            {/* 質問1: 野菜 */}
+            {/* いつのごはん? */}
             <div>
-              <p className="font-bold mb-2">🥗 野菜はどのくらい?</p>
-              <div className="grid grid-cols-4 gap-2">
-                {VEGGIE_LABELS.map((label, i) => (
+              <p className="font-bold mb-2">🕐 いつのごはん?</p>
+              <div className="grid grid-cols-3 gap-2">
+                {SLOTS.map((s) => (
                   <button
-                    key={label}
-                    onClick={() => setVeggieAmount(i as 0 | 1 | 2 | 3)}
+                    key={s}
+                    onClick={() => setSlot(s)}
                     className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-colors ${
-                      veggieAmount === i
+                      slot === s
                         ? "bg-leaf-500 border-leaf-500 text-white"
                         : "bg-white border-leaf-100 text-foreground/70"
                     }`}
                   >
-                    {label}
+                    {SLOT_LABELS[s]}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* 質問2・3 */}
+            {/* 野菜のグラム数 */}
+            <div>
+              <p className="font-bold mb-2">
+                🥗 野菜はどのくらい?
+                {veggieGrams !== null && (
+                  <span className="text-leaf-600 font-bold text-sm ml-2">
+                    {veggieGrams}g(
+                    {VEGGIE_LABELS[veggieAmountFromGrams(veggieGrams)]})
+                  </span>
+                )}
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {GRAM_PRESETS.map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setVeggieGrams(g)}
+                    className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-colors ${
+                      veggieGrams === g
+                        ? "bg-leaf-500 border-leaf-500 text-white"
+                        : "bg-white border-leaf-100 text-foreground/70"
+                    }`}
+                  >
+                    {g}g
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* タンパク質・主食 */}
             {(
               [
                 ["🍖 タンパク質はある?", hasProtein, setHasProtein],
@@ -171,9 +224,28 @@ export default function MealUploadModal({
               </div>
             ))}
 
-            {error && (
-              <p className="text-sm text-red-500 font-bold">{error}</p>
-            )}
+            {/* おいしさ */}
+            <div>
+              <p className="font-bold mb-2">😋 おいしかった?</p>
+              <div className="grid grid-cols-5 gap-2">
+                {([1, 2, 3, 4, 5] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTastiness(t)}
+                    aria-label={`おいしさ${t}`}
+                    className={`py-2.5 rounded-xl text-lg border-2 transition-colors ${
+                      tastiness !== null && t <= tastiness
+                        ? "bg-amber-100 border-amber-300"
+                        : "bg-white border-leaf-100 opacity-50"
+                    }`}
+                  >
+                    ⭐
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {error && <p className="text-sm text-red-500 font-bold">{error}</p>}
 
             <button
               onClick={submit}
@@ -198,71 +270,14 @@ export default function MealUploadModal({
           </div>
         )}
 
-        {step === "result" && result && (
-          <ResultView result={result} onFinish={finish} />
+        {step === "result" && result && tastiness !== null && (
+          <MealResultView
+            result={result}
+            tastiness={tastiness}
+            onFinish={finish}
+          />
         )}
       </div>
-    </div>
-  );
-}
-
-function ResultView({
-  result,
-  onFinish,
-}: {
-  result: MealResult;
-  onFinish: () => void;
-}) {
-  const c = result.character;
-  const level = levelFromExp(c.exp);
-  const stage = stageFromLevel(level);
-  const mood = moodOf(c.last_meal_date, c.recent_veggie_avg);
-
-  return (
-    <div className="py-4 flex flex-col items-center gap-4 text-center animate-pop-in">
-      <div className="animate-bob">
-        <CharacterSvg stage={stage} mood={mood} size={150} />
-      </div>
-
-      {result.evolved ? (
-        <p className="text-xl font-extrabold text-leaf-600">
-          🎉 {STAGE_NAMES[stage]}に進化した!
-        </p>
-      ) : result.leveledUp ? (
-        <p className="text-xl font-extrabold text-leaf-600">
-          ⬆️ レベルアップ! Lv.{result.newLevel}
-        </p>
-      ) : (
-        <p className="text-xl font-extrabold text-leaf-600">
-          ごちそうさま!
-        </p>
-      )}
-
-      <div className="w-full rounded-2xl bg-leaf-50 p-4">
-        <p className="text-sm text-foreground/60 font-bold mb-1">
-          きょうのごはんスコア
-        </p>
-        <p className="text-3xl font-extrabold text-leaf-700">
-          {result.score}
-          <span className="text-base text-foreground/50"> / {MAX_SCORE}</span>
-        </p>
-        <p className="text-sm text-foreground/60 mt-1">
-          +{result.score} EXP / 🔥 {c.streak}日連続
-        </p>
-      </div>
-
-      {result.score < 6 && (
-        <p className="text-sm text-foreground/60">
-          次は野菜をもうすこし足してみよう🥬
-        </p>
-      )}
-
-      <button
-        onClick={onFinish}
-        className="w-full h-12 rounded-full bg-leaf-500 text-white font-bold active:scale-95 transition-transform"
-      >
-        とじる
-      </button>
     </div>
   );
 }

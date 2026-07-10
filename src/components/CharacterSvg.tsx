@@ -1,4 +1,5 @@
-import type { Mood, Stage } from "@/lib/game";
+import type { Branch, Mood, Stage } from "@/lib/game";
+import { BRANCH_VISIBLE_STAGE } from "@/lib/game";
 
 type Palette = {
   body: string;
@@ -11,6 +12,14 @@ const PALETTES: Record<Mood, Palette> = {
   happy: { body: "#8ED081", shade: "#6BB864", leaf: "#4C9F4C", cheek: "#FFAFA6" },
   ok: { body: "#AEDBA3", shade: "#8FC488", leaf: "#6FAE6F", cheek: "#FFC9C2" },
   sad: { body: "#C2CEBD", shade: "#A6B5A2", leaf: "#93A78F", cheek: "none" },
+};
+
+// 分岐ごとの体色の上書き(sadのときは灰色を優先して適用しない)
+const BRANCH_TINTS: Record<Branch, Partial<Palette>> = {
+  leaf: { body: "#79C46F", shade: "#57A84F", leaf: "#2F8A2F" },
+  muscle: { body: "#F2B36B", shade: "#DD974A" },
+  mochi: { body: "#F5DC97", shade: "#E2C46E" },
+  balance: {},
 };
 
 function Face({ mood, cx, cy, s }: { mood: Mood; cx: number; cy: number; s: number }) {
@@ -85,19 +94,100 @@ function Leaf({
   );
 }
 
-// 成長段階 × 気分で見た目が変わるキャラクター
+function Star({ cx, cy, size, fill }: { cx: number; cy: number; size: number; fill: string }) {
+  const pts = [0, 1, 2, 3, 4]
+    .flatMap((i) => {
+      const outer = ((i * 72 - 90) * Math.PI) / 180;
+      const inner = ((i * 72 - 54) * Math.PI) / 180;
+      return [
+        `${cx + Math.cos(outer) * size},${cy + Math.sin(outer) * size}`,
+        `${cx + Math.cos(inner) * size * 0.45},${cy + Math.sin(inner) * size * 0.45}`,
+      ];
+    })
+    .join(" ");
+  return <polygon points={pts} fill={fill} />;
+}
+
+// 分岐アクセサリ(ステージ3以上で表示)
+function BranchDecoration({
+  branch,
+  stage,
+  leafColor,
+}: {
+  branch: Branch;
+  stage: Stage;
+  leafColor: string;
+}) {
+  const armY = stage === 4 ? 118 : 124;
+  const armLX = stage === 4 ? 32 : 40;
+  const armRX = stage === 4 ? 168 : 160;
+  const headTopY = stage === 4 ? 46 : 58;
+
+  switch (branch) {
+    case "leaf":
+      // 頭のわきに小さな葉を追加
+      return (
+        <g>
+          <Leaf x={70} y={headTopY + 26} angle={-58} size={0.7} color={leafColor} />
+          <Leaf x={130} y={headTopY + 26} angle={58} size={0.7} color={leafColor} />
+        </g>
+      );
+    case "muscle":
+      // うでに星
+      return (
+        <g>
+          <Star cx={armLX} cy={armY} size={7} fill="#FFD666" />
+          <Star cx={armRX} cy={armY} size={7} fill="#FFD666" />
+        </g>
+      );
+    case "mochi":
+      // 頭の上に米粒
+      return (
+        <g>
+          <ellipse cx={84} cy={headTopY - 4} rx={5} ry={8} fill="#FFFDF5" stroke="#E3C46E" strokeWidth={1.5} transform={`rotate(-18 84 ${headTopY - 4})`} />
+          <ellipse cx={100} cy={headTopY - 10} rx={5.5} ry={9} fill="#FFFDF5" stroke="#E3C46E" strokeWidth={1.5} />
+          <ellipse cx={116} cy={headTopY - 4} rx={5} ry={8} fill="#FFFDF5" stroke="#E3C46E" strokeWidth={1.5} transform={`rotate(18 116 ${headTopY - 4})`} />
+        </g>
+      );
+    case "balance":
+      // 頭の上に虹の輪
+      return (
+        <g opacity={0.85}>
+          {["#FF9E9E", "#FFD666", "#8ED081", "#9ECBEB"].map((color, i) => (
+            <path
+              key={color}
+              d={`M ${62 + i * 4} ${headTopY + 6} A ${38 - i * 4} ${30 - i * 4} 0 0 1 ${138 - i * 4} ${headTopY + 6}`}
+              stroke={color}
+              strokeWidth={3.5}
+              fill="none"
+              strokeLinecap="round"
+            />
+          ))}
+        </g>
+      );
+  }
+}
+
+// 成長段階 × 気分(× 分岐)で見た目が変わるキャラクター
 export default function CharacterSvg({
   stage,
   mood,
+  branch,
   size = 200,
   className,
 }: {
   stage: Stage;
   mood: Mood;
+  branch?: Branch;
   size?: number;
   className?: string;
 }) {
-  const p = PALETTES[mood];
+  const base = PALETTES[mood];
+  const showBranch = branch !== undefined && stage >= BRANCH_VISIBLE_STAGE;
+  const p: Palette =
+    showBranch && mood !== "sad"
+      ? { ...base, ...BRANCH_TINTS[branch] }
+      : base;
 
   return (
     <svg
@@ -144,6 +234,9 @@ export default function CharacterSvg({
           <ellipse cx={160} cy={124} rx={13} ry={20} fill={p.body} stroke={p.shade} strokeWidth={3} transform="rotate(-20 160 124)" />
           <circle cx={100} cy={120} r={58} fill={p.body} stroke={p.shade} strokeWidth={3} />
           <path d="M 54 140 A 58 58 0 0 0 146 140 A 72 72 0 0 1 54 140" fill={p.shade} opacity={0.35} />
+          {showBranch && (
+            <BranchDecoration branch={branch} stage={3} leafColor={p.leaf} />
+          )}
           <Face mood={mood} cx={100} cy={118} s={1.15} />
           <Cheeks palette={p} cx={100} cy={118} s={1.15} />
         </g>
@@ -161,6 +254,9 @@ export default function CharacterSvg({
           <path d="M 48 140 A 66 66 0 0 0 152 140 A 82 82 0 0 1 48 140" fill={p.shade} opacity={0.35} />
           {/* おとなの証の王冠風スター */}
           <path d="M 100 20 L 104 30 L 114 30 L 106 37 L 109 47 L 100 41 L 91 47 L 94 37 L 86 30 L 96 30 Z" fill="#FFD666" />
+          {showBranch && (
+            <BranchDecoration branch={branch} stage={4} leafColor={p.leaf} />
+          )}
           <Face mood={mood} cx={100} cy={114} s={1.3} />
           <Cheeks palette={p} cx={100} cy={114} s={1.3} />
         </g>

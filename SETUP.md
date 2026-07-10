@@ -56,6 +56,60 @@
 
 これでスマホからアクセスして使えるようになります。被験者にはURLを共有するだけでOK。
 
+## 4. 通知機能(Web Push)を設定する(約10分)
+
+### DBマイグレーション
+
+Supabaseの **SQL Editor** で `supabase/migrations/002_features.sql` の中身を貼り付けて **Run**。
+(通知テーブル・食事スロット・栄養素カラムなどが追加されます)
+
+### VAPIDキーの生成と環境変数
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+`.env.local` とVercelの Environment Variables に以下を追加:
+
+```bash
+# Web Push(上のコマンドで生成した値)
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=<Public Key>
+VAPID_PRIVATE_KEY=<Private Key>
+
+# Supabaseの Project Settings > API Keys から(service_role。絶対に公開しない)
+SUPABASE_SERVICE_ROLE_KEY=<service_role キー>
+
+# リマインダーcron用の適当な長いランダム文字列(openssl rand -hex 32 などで生成)
+CRON_SECRET=<ランダム文字列>
+```
+
+### リマインダーの定期実行(GitHub Actions)
+
+Vercel Hobbyのcronは1日1回しか動かせないため、GitHub Actionsから15分ごとに叩く。
+
+GitHubリポジトリの **Settings > Secrets and variables > Actions** に追加:
+
+- `APP_URL`: デプロイ先URL(例: `https://xxx.vercel.app`)
+- `CRON_SECRET`: 上と同じ値
+
+ワークフローは `.github/workflows/reminder-cron.yml` にあり、pushすれば自動で有効になる。
+動作確認は Actions タブから `reminder-cron` を手動実行(workflow_dispatch)。
+
+### ローカルでの通知テスト
+
+Web PushはHTTPS必須なので:
+
+```bash
+npx next dev --experimental-https
+```
+
+→ https://localhost:3000 の「せってい」で通知をオン → 「テスト通知を送る」。
+
+### iPhoneでの注意
+
+iOSは **ホーム画面に追加したPWAからのみ** 通知を受け取れる(iOS 16.4以上)。
+Safariで開いて共有ボタン →「ホーム画面に追加」→ 追加したアプリを開いて設定する。
+
 ## トラブルシューティング
 
 - **ログイン後に localhost に戻ってしまう**: SupabaseのSite URL / Redirect URLsの設定漏れ
