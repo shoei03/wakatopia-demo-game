@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import type { User } from "@supabase/supabase-js";
-import { getSupabase } from "@/lib/supabase";
+import { useState } from "react";
+import Image from "next/image";
+import { useQueryClient } from "@tanstack/react-query";
+import { createCharacter, type MealResult } from "@/lib/meals";
 import {
-  createCharacter,
-  fetchMyCharacter,
-  fetchMealsSince,
-  fetchRecentMeals,
-  type MealResult,
-} from "@/lib/meals";
+  applyMealMutation,
+  setCharacterCache,
+  useMyCharacter,
+  useRecentMeals,
+  useRequireUserId,
+  useTodayMeals,
+} from "@/lib/queries";
 import {
   appearanceOf,
   BRANCH_LABELS,
@@ -20,13 +21,12 @@ import {
   levelFromExp,
   levelProgress,
   MOOD_LABELS,
-  jstTodayStartIso,
   moodOf,
   stageFromLevel,
   STAGE_NAMES,
   VEGGIE_LABELS,
 } from "@/lib/game";
-import type { Character, Meal } from "@/lib/types";
+import type { Character } from "@/lib/types";
 import CharacterSvg from "@/components/CharacterSvg";
 import TappableCharacter from "@/components/TappableCharacter";
 import MealUploadModal from "@/components/MealUploadModal";
@@ -34,45 +34,31 @@ import BottomNav from "@/components/BottomNav";
 import VeggieMeter from "@/components/VeggieMeter";
 
 export default function HomePage() {
-  const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [character, setCharacter] = useState<Character | null>(null);
-  const [meals, setMeals] = useState<Meal[]>([]);
-  const [todayGrams, setTodayGrams] = useState(0);
+  const queryClient = useQueryClient();
+  const { userId, checking } = useRequireUserId();
+  const characterQuery = useMyCharacter(userId);
+  const recentQuery = useRecentMeals(userId);
+  const todayQuery = useTodayMeals(userId);
   const [modalOpen, setModalOpen] = useState(false);
 
-  const loadData = useCallback(async (userId: string) => {
-    const [char, recent, todayMeals] = await Promise.all([
-      fetchMyCharacter(userId),
-      fetchRecentMeals(userId),
-      fetchMealsSince(userId, jstTodayStartIso()),
-    ]);
-    setCharacter(char);
-    setMeals(recent);
-    setTodayGrams(todayMeals.reduce((sum, m) => sum + (m.veggie_grams ?? 0), 0));
-  }, []);
-
-  useEffect(() => {
-    const supabase = getSupabase();
-    supabase.auth.getSession().then(async ({ data }) => {
-      const sessionUser = data.session?.user;
-      if (!sessionUser) {
-        router.replace("/");
-        return;
-      }
-      setUser(sessionUser);
-      await loadData(sessionUser.id);
-      setLoading(false);
-    });
-  }, [router, loadData]);
+  const character = characterQuery.data ?? null;
+  const meals = recentQuery.data ?? [];
+  const todayGrams = (todayQuery.data ?? []).reduce(
+    (sum, m) => sum + (m.veggie_grams ?? 0),
+    0
+  );
 
   const onMealComplete = (result: MealResult) => {
-    setCharacter(result.character);
-    if (user) loadData(user.id);
+    if (userId) applyMealMutation(queryClient, userId, result.character);
   };
 
-  if (loading) {
+  // キャッシュ済みなら即表示。スピナーは初回(キャッシュなし)のみ
+  if (
+    checking ||
+    characterQuery.isPending ||
+    recentQuery.isPending ||
+    todayQuery.isPending
+  ) {
     return (
       <main className="flex-1 flex items-center justify-center text-foreground/50">
         よみこみ中…
@@ -80,8 +66,13 @@ export default function HomePage() {
     );
   }
 
-  if (user && !character) {
-    return <NameSetup userId={user.id} onCreated={setCharacter} />;
+  if (userId && !character) {
+    return (
+      <NameSetup
+        userId={userId}
+        onCreated={(c) => setCharacterCache(queryClient, userId, c)}
+      />
+    );
   }
 
   if (!character) return null;
@@ -161,12 +152,13 @@ export default function HomePage() {
                 key={meal.id}
                 className="rounded-xl overflow-hidden bg-white border border-leaf-100"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={meal.photo_url}
                   alt="食事の写真"
+                  width={200}
+                  height={200}
+                  sizes="(max-width: 448px) 33vw, 144px"
                   className="w-full aspect-square object-cover"
-                  loading="lazy"
                 />
                 <div className="p-1.5 text-[11px] leading-tight">
                   <p className="font-bold text-leaf-700">{meal.score}てん</p>

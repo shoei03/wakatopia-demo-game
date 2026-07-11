@@ -1,63 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { deleteMeal } from "@/lib/meals";
 import {
-  deleteMeal,
-  fetchMealsSince,
-  fetchMyCharacter,
-} from "@/lib/meals";
+  applyMealMutation,
+  removeMealFromCache,
+  useMealHistory,
+  useMyCharacter,
+  useRequireUserId,
+} from "@/lib/queries";
 import { jstDateStr } from "@/lib/game";
-import type { Character, Meal } from "@/lib/types";
+import type { Meal } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import MealDayGroup from "@/components/MealDayGroup";
 
 const HISTORY_DAYS = 30;
 
 export default function MealsPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [character, setCharacter] = useState<Character | null>(null);
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const queryClient = useQueryClient();
+  const { userId, checking } = useRequireUserId();
+  const characterQuery = useMyCharacter(userId);
+  const mealsQuery = useMealHistory(userId, HISTORY_DAYS);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = useCallback(async (userId: string) => {
-    const since = new Date(
-      Date.now() - HISTORY_DAYS * 86_400_000
-    ).toISOString();
-    const [char, recent] = await Promise.all([
-      fetchMyCharacter(userId),
-      fetchMealsSince(userId, since),
-    ]);
-    setCharacter(char);
-    setMeals(recent);
-  }, []);
-
-  useEffect(() => {
-    getSupabase()
-      .auth.getSession()
-      .then(async ({ data }) => {
-        const sessionUser = data.session?.user;
-        if (!sessionUser) {
-          router.replace("/");
-          return;
-        }
-        await loadData(sessionUser.id);
-        setLoading(false);
-      });
-  }, [router, loadData]);
+  const character = characterQuery.data ?? null;
+  const meals = mealsQuery.data ?? [];
 
   const onDelete = async (meal: Meal) => {
-    if (!character) return;
+    if (!character || !userId) return;
     if (!window.confirm("この記録を削除する?もらったEXPも戻るよ")) return;
     setDeletingId(meal.id);
     setError(null);
     try {
       const updated = await deleteMeal(character, meal);
-      setCharacter(updated);
-      setMeals((prev) => prev.filter((m) => m.id !== meal.id));
+      removeMealFromCache(queryClient, meal.id);
+      applyMealMutation(queryClient, userId, updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "削除に失敗しました");
     } finally {
@@ -65,7 +44,8 @@ export default function MealsPage() {
     }
   };
 
-  if (loading) {
+  // キャッシュ済みなら即表示。スピナーは初回(キャッシュなし)のみ
+  if (checking || characterQuery.isPending || mealsQuery.isPending) {
     return (
       <main className="flex-1 flex items-center justify-center text-foreground/50">
         よみこみ中…

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   DAILY_VEGGIE_TARGET_G,
   defaultSlot,
@@ -68,12 +69,13 @@ export default function MealDayGroup({
                     key={meal.id}
                     className="relative rounded-xl overflow-hidden bg-white border border-leaf-100"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={meal.photo_url}
                       alt="食事の写真"
+                      width={200}
+                      height={200}
+                      sizes="(max-width: 448px) 33vw, 144px"
                       className="w-full aspect-square object-cover"
-                      loading="lazy"
                     />
                     <button
                       onClick={() => onDelete(meal)}

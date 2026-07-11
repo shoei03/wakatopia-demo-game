@@ -1,46 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   acceptFriendRequest,
-  fetchFriendLists,
   removeFriendship,
   type FriendEntry,
-  type FriendLists,
 } from "@/lib/friends";
+import { useFriendLists, useRequireUserId } from "@/lib/queries";
 import { appearanceOf, levelFromExp, moodOf, stageFromLevel } from "@/lib/game";
 import CharacterSvg from "@/components/CharacterSvg";
 import BottomNav from "@/components/BottomNav";
 
 export default function FriendsPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [lists, setLists] = useState<FriendLists | null>(null);
+  const queryClient = useQueryClient();
+  const { userId, checking } = useRequireUserId();
+  const listsQuery = useFriendLists(userId);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const reload = useCallback(async (uid: string) => {
-    setLists(await fetchFriendLists(uid));
-  }, []);
-
-  useEffect(() => {
-    getSupabase()
-      .auth.getSession()
-      .then(async ({ data }) => {
-        const sessionUser = data.session?.user;
-        if (!sessionUser) {
-          router.replace("/");
-          return;
-        }
-        setUserId(sessionUser.id);
-        await reload(sessionUser.id);
-        setLoading(false);
-      });
-  }, [router, reload]);
+  const lists = listsQuery.data ?? null;
 
   const act = async (friendshipId: string, action: "accept" | "remove") => {
     if (!userId) return;
@@ -49,7 +29,8 @@ export default function FriendsPage() {
     try {
       if (action === "accept") await acceptFriendRequest(friendshipId);
       else await removeFriendship(friendshipId);
-      await reload(userId);
+      // 再取得完了まで待ってからボタンの busy を解除する
+      await queryClient.invalidateQueries({ queryKey: ["friends", userId] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "操作に失敗しました");
     } finally {
@@ -57,7 +38,8 @@ export default function FriendsPage() {
     }
   };
 
-  if (loading) {
+  // キャッシュ済みなら即表示。スピナーは初回(キャッシュなし)のみ
+  if (checking || listsQuery.isPending) {
     return (
       <main className="flex-1 flex items-center justify-center text-foreground/50">
         よみこみ中…

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { M_PLUS_Rounded_1c } from "next/font/google";
 import "./globals.css";
+import Providers from "@/components/Providers";
 import SwRegister from "@/components/SwRegister";
 
 const rounded = M_PLUS_Rounded_1c({
@@ -38,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="ja" className={`${rounded.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
-        {children}
+        <Providers>{children}</Providers>
         <SwRegister />
       </body>
     </html>

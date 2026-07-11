@@ -3,31 +3,17 @@
 // クライアントページ: ログイン中はRLSがフレンド限定キャラも返すため、
 // ブラウザクライアント(セッション付き)で取得する。未ログインでもpublic分は見える。
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getSupabase, hasSupabaseEnv } from "@/lib/supabase";
-import type { Character } from "@/lib/types";
+import { hasSupabaseEnv } from "@/lib/supabase";
+import { usePlazaCharacters } from "@/lib/queries";
 import CharacterCard from "@/components/CharacterCard";
 import BottomNav from "@/components/BottomNav";
 
 export default function PlazaPage() {
-  // envが無い場合はフェッチしないので、最初からloading=falseにしておく
-  const [loading, setLoading] = useState(() => hasSupabaseEnv());
-  const [characters, setCharacters] = useState<Character[]>([]);
-
-  useEffect(() => {
-    if (!hasSupabaseEnv()) return;
-    getSupabase()
-      .from("characters")
-      .select()
-      .order("streak", { ascending: false })
-      .order("exp", { ascending: false })
-      .limit(100)
-      .then(({ data }) => {
-        setCharacters((data ?? []) as Character[]);
-        setLoading(false);
-      });
-  }, []);
+  const charactersQuery = usePlazaCharacters();
+  // envが無い場合はフェッチしない(enabled: false)ので空一覧の表示にする
+  const loading = hasSupabaseEnv() && charactersQuery.isPending;
+  const characters = charactersQuery.data ?? [];
 
   return (
     <main className="flex-1 max-w-md w-full mx-auto p-4 pb-24">

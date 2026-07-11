@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase";
+import {
+  useNotificationLog,
+  useRequireUserId,
+  type NotificationLogRow,
+} from "@/lib/queries";
 import { jstDateStr } from "@/lib/game";
 import BottomNav from "@/components/BottomNav";
 
 const LIMIT = 50;
-
-type NotificationLogRow = {
-  id: string;
-  kind: string;
-  sent_at: string;
-};
 
 const KIND_LABELS: Record<string, string> = {
   reminder_morning: "🥬 朝ごはんのリマインド",
@@ -41,33 +37,18 @@ const headingOf = (date: string) =>
   });
 
 export default function NotificationsPage() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<NotificationLogRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { userId, checking } = useRequireUserId();
+  const logsQuery = useNotificationLog(userId, LIMIT);
 
-  useEffect(() => {
-    getSupabase()
-      .auth.getSession()
-      .then(async ({ data }) => {
-        const sessionUser = data.session?.user;
-        if (!sessionUser) {
-          router.replace("/");
-          return;
-        }
-        const { data: rows, error } = await getSupabase()
-          .from("notification_log")
-          .select("id, kind, sent_at")
-          .eq("user_id", sessionUser.id)
-          .order("sent_at", { ascending: false })
-          .limit(LIMIT);
-        if (error) setError(error.message);
-        else setLogs(rows ?? []);
-        setLoading(false);
-      });
-  }, [router]);
+  const logs = logsQuery.data ?? [];
+  const error = logsQuery.error
+    ? logsQuery.error instanceof Error
+      ? logsQuery.error.message
+      : "読み込みに失敗しました"
+    : null;
 
-  if (loading) {
+  // キャッシュ済みなら即表示。スピナーは初回(キャッシュなし)のみ
+  if (checking || logsQuery.isPending) {
     return (
       <main className="flex-1 flex items-center justify-center text-foreground/50">
         よみこみ中…

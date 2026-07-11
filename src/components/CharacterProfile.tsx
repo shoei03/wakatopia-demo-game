@@ -5,6 +5,7 @@
 // フレンド限定キャラは CharacterProfileLoader がブラウザクライアントで再取得する。
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { getSupabase } from "@/lib/supabase";
 import {
@@ -76,12 +77,13 @@ export default function CharacterProfile({
                 key={meal.id}
                 className="rounded-xl overflow-hidden bg-white border border-leaf-100"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={meal.photo_url}
                   alt="食事の写真"
+                  width={200}
+                  height={200}
+                  sizes="(max-width: 448px) 33vw, 144px"
                   className="w-full aspect-square object-cover"
-                  loading="lazy"
                 />
                 <p className="p-1.5 text-[11px] font-bold text-leaf-700">
                   {meal.score}てん・🥬{VEGGIE_LABELS[meal.veggie_amount]}

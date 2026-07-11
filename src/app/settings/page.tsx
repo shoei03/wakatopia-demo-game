@@ -1,42 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { getSupabase } from "@/lib/supabase";
-import { fetchMyCharacter, updateCharacterName } from "@/lib/meals";
+import { updateCharacterName } from "@/lib/meals";
 import { updateVisibility } from "@/lib/friends";
+import {
+  setCharacterCache,
+  useMyCharacter,
+  useRequireUserId,
+} from "@/lib/queries";
 import type { Character, CharacterVisibility } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import NotificationSettings from "@/components/NotificationSettings";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [character, setCharacter] = useState<Character | null>(null);
+  const queryClient = useQueryClient();
+  const { userId, checking } = useRequireUserId();
+  const characterQuery = useMyCharacter(userId);
 
-  useEffect(() => {
-    getSupabase()
-      .auth.getSession()
-      .then(async ({ data }) => {
-        const sessionUser = data.session?.user;
-        if (!sessionUser) {
-          router.replace("/");
-          return;
-        }
-        setUserId(sessionUser.id);
-        setCharacter(await fetchMyCharacter(sessionUser.id));
-        setLoading(false);
-      });
-  }, [router]);
+  const character = characterQuery.data ?? null;
+  const onCharacterUpdated = (c: Character) => {
+    if (userId) setCharacterCache(queryClient, userId, c);
+  };
 
   const signOut = async () => {
+    // キャッシュ破棄は Providers の onAuthStateChange(SIGNED_OUT) が行う
     await getSupabase().auth.signOut();
     router.replace("/");
   };
 
-  if (loading) {
+  // キャッシュ済みなら即表示。スピナーは初回(キャッシュなし)のみ
+  if (checking || characterQuery.isPending) {
     return (
       <main className="flex-1 flex items-center justify-center text-foreground/50">
         よみこみ中…
@@ -51,11 +49,11 @@ export default function SettingsPage() {
       </header>
 
       {character && (
-        <NameEditor character={character} onUpdated={setCharacter} />
+        <NameEditor character={character} onUpdated={onCharacterUpdated} />
       )}
 
       {character && (
-        <VisibilityEditor character={character} onUpdated={setCharacter} />
+        <VisibilityEditor character={character} onUpdated={onCharacterUpdated} />
       )}
 
       <section className="rounded-2xl bg-white border border-leaf-100 shadow-sm p-4">
