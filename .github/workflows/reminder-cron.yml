@@ -19,6 +19,13 @@ jobs:
     steps:
       - name: Call reminders endpoint
         run: |
-          curl -sS --fail-with-body \
+          response=$(curl -sS --fail-with-body \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.APP_URL }}/api/cron/reminders"
+            "${{ secrets.APP_URL }}/api/cron/reminders")
+          echo "$response"
+          # 3xxリダイレクトはcurlの--failでは検知できないため、
+          # APIの正常レスポンス({"sent":...})かどうかを本文で確認する
+          if ! echo "$response" | grep -q '"sent"'; then
+            echo "::error::reminders endpoint did not return a sent count"
+            exit 1
+          fi

@@ -5,10 +5,12 @@ import { sendPushToUser, type NotificationKind } from "@/lib/push-server";
 import type { NotificationPrefs } from "@/lib/types";
 
 // 15分ごとに外部スケジューラ(GitHub Actions等)から叩かれるリマインダー送信
-// 各ユーザーの設定時刻(JST)から15分以内なら送信する
+// 各ユーザーの設定時刻(JST)からWINDOW_MINUTES以内なら送信する
 export const dynamic = "force-dynamic";
 
-const WINDOW_MINUTES = 15;
+// GitHub Actionsのscheduleは実測で60〜96分遅延することがあるため広めに取る。
+// notification_logの「同種は1日1回」チェックがあるので二重送信にはならない。
+const WINDOW_MINUTES = 90;
 
 const SLOTS: {
   slot: MealSlot;

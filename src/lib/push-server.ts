@@ -76,10 +76,16 @@ export async function sendPushToUser(
       sent++;
       return;
     }
-    const statusCode = (result.reason as { statusCode?: number })?.statusCode;
+    const reason = result.reason as { statusCode?: number; body?: string };
+    const statusCode = reason?.statusCode;
     if (statusCode === 404 || statusCode === 410) {
       expired.push(subscriptions[i].endpoint);
+      return;
     }
+    // 403(VAPID不一致)等はVercelログで追えるように残す
+    console.error(
+      `push send failed: user=${userId} kind=${kind} status=${statusCode} body=${reason?.body ?? result.reason}`
+    );
   });
 
   if (expired.length > 0) {
