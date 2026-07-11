@@ -68,6 +68,13 @@ export default function SettingsPage() {
       {userId && <NotificationSettings userId={userId} />}
 
       <section className="rounded-2xl bg-white border border-leaf-100 shadow-sm p-4">
+        <Link href="/notifications" className="flex items-center justify-between">
+          <span className="font-extrabold">📜 通知履歴</span>
+          <span className="text-foreground/40 text-sm font-bold">→</span>
+        </Link>
+      </section>
+
+      <section className="rounded-2xl bg-white border border-leaf-100 shadow-sm p-4">
         <button
           onClick={signOut}
           className="w-full py-2 text-sm font-bold text-red-400"
